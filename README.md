@@ -1,11 +1,22 @@
-# Substack Scraper
+# Substack Downloader
 
-A robust Python tool to archive Substack newsletters you are subscribed to. It downloads posts as offline-viewable HTML files, handling authentication, rate limiting, and custom domains.
+A tool to **archive** Substack newsletters you are currently subscribed to. This allows you to keep an offline copy of the content you have paid for, forever.
+
+> [!IMPORTANT]
+> **This is NOT a piracy tool.**
+> *   It can **only** download content you usually have access to.
+> *   It does **not** bypass paywalls for newsletters you are not subscribed to.
+> *   Its primary use case is archiving your library before you unsubscribe.
+
+## Privacy & Security
+
+*   **100% Local**: Your cookies, session data, and downloaded articles are stored **only on your computer**. Nothing is ever sent to any external server.
+*   **Safe**: Your credentials are used strictly to authenticate with Substack for downloading your own content.
 
 ## Features
 
-- **Full Archive Access**: Scrapes all posts from a newsletter archive.
-- **Paid Content Support**: Handles authentication to download subscriber-only posts.
+- **Personal Archive**: Download all posts from a newsletter to your local machine.
+- **Paid Content Support**: Authenticates using your existing subscription to archive subscriber-only posts.
 - **Custom Domain Support**: Includes a login helper to bypass bot protection on custom domains (e.g., `lennysnewsletter.com`).
 - **Podcast Skipping**: Option to skip podcast/audio episodes (`--skip-podcasts`).
 - **HTML Export**: Saves clean, readable HTML files with images embedded (or linked).
