@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, urljoin
 
 load_dotenv()
 
@@ -87,8 +87,44 @@ class SubstackScraper:
             print(f"Error fetching post {slug}: {e}")
             return None
 
-    def save_post(self, post, output_dir):
-        """Save post content to file."""
+    def download_image(self, img_url, assets_dir):
+        """Download an image and return its local filename."""
+        try:
+            # Parse URL to get filename
+            parsed = urlparse(img_url)
+            filename = os.path.basename(parsed.path)
+            
+            # Remove query parameters if present
+            if '?' in filename:
+                filename = filename.split('?')[0]
+                
+            if not filename or not filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+                filename = f"image_{int(time.time())}_{len(os.listdir(assets_dir))}.jpg"
+
+            # Check if likely a relative URL or needs base
+            if not img_url.startswith(('http:', 'https:')):
+                img_url = urljoin(self.base_url, img_url)
+
+            local_path = os.path.join(assets_dir, filename)
+            
+            # Don't re-download if exists
+            if os.path.exists(local_path):
+                return filename
+
+            response = self.session.get(img_url, stream=True)
+            response.raise_for_status()
+            
+            with open(local_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            return filename
+        except Exception as e:
+            print(f"Failed to download image {img_url}: {e}")
+            return None
+
+    def save_post(self, post, output_dir, html_only=False, md_only=False):
+        """Save post content to file (HTML and/or Markdown) with local images."""
         if not post:
             return
 
@@ -100,16 +136,58 @@ class SubstackScraper:
         safe_slug = "".join([c for c in slug if c.isalpha() or c.isdigit() or c in (' ', '-', '_')]).rstrip()
         filename_base = f"{date}_{safe_slug}"
         
-        # Save HTML content
         html_content = post.get('body_html', '')
-        if html_content:
+        if not html_content:
+            return
+
+        # Prepare assets directory
+        assets_dir = os.path.join(output_dir, "assets")
+        if not os.path.exists(assets_dir):
+            os.makedirs(assets_dir)
+
+        # Process HTML with BeautifulSoup to find and download images
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Dictionary to map original URLs to local filenames for Markdown conversion
+        image_map = {}
+
+        for img in soup.find_all('img'):
+            src = img.get('src')
+            if src:
+                local_filename = self.download_image(src, assets_dir)
+                if local_filename:
+                    # Update HTML src to point to local file (relative path)
+                    img['src'] = f"assets/{local_filename}"
+                    # Remove srcset to force browser to use src
+                    if img.has_attr('srcset'):
+                        del img['srcset']
+                    
+                    image_map[src] = f"assets/{local_filename}"
+
+        # 1. Save HTML (if not disabled)
+        if not md_only:
+            # We save the modified soup with local image links
+            full_html = f"<html><head><title>{title}</title></head><body><h1>{title}</h1>{soup.prettify()}</body></html>"
             with open(os.path.join(output_dir, f"{filename_base}.html"), 'w') as f:
-                # Wrap in simple HTML template for readability
-                full_html = f"<html><head><title>{title}</title></head><body><h1>{title}</h1>{html_content}</body></html>"
                 f.write(full_html)
 
+        # 2. Save Markdown (if not disabled)
+        if not html_only:
+            from markdownify import markdownify
+            
+            # Convert the MODIFIED html (with local links) to Markdown
+            # This ensures the markdown points to assets/image.jpg
+            md_content = markdownify(str(soup), heading_style="ATX")
+            
+            # Add metadata header
+            full_md = f"# {title}\n\nDate: {date}\nURL: {self.base_url}/p/{slug}\n\n{md_content}"
+            
+            with open(os.path.join(output_dir, f"{filename_base}.md"), 'w') as f:
+                f.write(full_md)
 
-    def scrape(self, output_dir="archive", limit=None, skip_podcasts=False):
+
+    def scrape(self, output_dir="archive", limit=None, skip_podcasts=False, html_only=False, md_only=False):
         """Main scraping loop."""
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -153,7 +231,7 @@ class SubstackScraper:
                 
                 full_post = self.get_post(slug)
                 if full_post:
-                    self.save_post(full_post, output_dir)
+                    self.save_post(full_post, output_dir, html_only=html_only, md_only=md_only)
                     total_fetched += 1
             
             # Since we might skip posts, we can't just rely on total_fetched for offset
@@ -171,6 +249,8 @@ def main():
     parser.add_argument("--cookie", help="substack.sid cookie (optional, overrides .env)")
     parser.add_argument("--limit", type=int, help="Limit number of posts to scrape")
     parser.add_argument("--skip-podcasts", action="store_true", help="Skip downloading podcast episodes")
+    parser.add_argument("--html-only", action="store_true", help="Save only HTML files")
+    parser.add_argument("--md-only", action="store_true", help="Save only Markdown files")
     
     args = parser.parse_args()
 
@@ -204,11 +284,10 @@ def main():
                  scraper = SubstackScraper(args.url, cookie)
     
     # Create a nice output directory name from the URL
-    from urllib.parse import urlparse
     domain = urlparse(args.url).netloc
     output_dir = os.path.join("archive", domain)
     
-    scraper.scrape(output_dir=output_dir, limit=args.limit, skip_podcasts=args.skip_podcasts)
+    scraper.scrape(output_dir=output_dir, limit=args.limit, skip_podcasts=args.skip_podcasts, html_only=args.html_only, md_only=args.md_only)
 
 if __name__ == "__main__":
     main()

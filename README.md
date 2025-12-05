@@ -18,9 +18,10 @@ A tool to **archive** Substack newsletters you are currently subscribed to. This
 - **Personal Archive**: Download all posts from a newsletter to your local machine.
 - **Paid Content Support**: Authenticates using your existing subscription to archive subscriber-only posts.
 - **Custom Domain Support**: Includes a login helper to bypass bot protection on custom domains (e.g., `lennysnewsletter.com`).
+- **Offline Assets**: Downloads images locally so you can view posts without an internet connection.
+- **Markdown Support**: Converts posts to Markdown (`.md`) with local image links, perfect for Obsidian or Notion.
 - **Podcast Skipping**: Option to skip podcast/audio episodes (`--skip-podcasts`).
-- **HTML Export**: Saves clean, readable HTML files with images embedded (or linked).
-- **Rate Limiting**: Polite scraping with built-in delays.
+- **HTML Export**: Saves clean, readable HTML files.
 
 ## Installation
 
@@ -69,9 +70,14 @@ Newsletters with their own domains are isolated "islands" and require their own 
 
 ## Usage
 
-**Basic Scrape:**
+**Basic Scrape** (HTML + Markdown + Images):
 ```bash
 python scraper.py --url https://read.substack.com
+```
+
+**Markdown Only (Best for Obsidian):**
+```bash
+python scraper.py --url https://read.substack.com --md-only
 ```
 
 **Skip Podcasts:**
@@ -92,11 +98,12 @@ Downloaded posts are saved in the `archive/` directory, organized by domain:
 ```
 archive/
 ├── read.substack.com/
-│   ├── 2023-10-01_some-post-title.html
-│   └── ...
-└── www.robkhenderson.com/
-    ├── 2025-11-27_scarcity-and-gratitude.html
-    └── ...
+│   ├── assets/
+│   │   ├── image1.jpg
+│   │   └── ...
+│   ├── 2023-10-01_some-post-title.md
+│   └── 2023-10-01_some-post-title.html
+└── ...
 ```
 
 ## Disclaimer
