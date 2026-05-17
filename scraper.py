@@ -214,7 +214,7 @@ class SubstackScraper:
             
             # We save the modified soup with local image links
             full_html = f"<html><head><title>{title}</title>{css}</head><body><h1>{title}</h1>{soup.prettify()}</body></html>"
-            with open(os.path.join(output_dir, f"{filename_base}.html"), 'w') as f:
+            with open(os.path.join(output_dir, f"{filename_base}.html"), 'w', encoding='utf-8') as f:
                 f.write(full_html)
 
         # 2. Save Markdown (if not disabled)
@@ -228,7 +228,7 @@ class SubstackScraper:
             # Add metadata header
             full_md = f"# {title}\n\nDate: {date}\nURL: {self.base_url}/p/{slug}\n\n{md_content}"
             
-            with open(os.path.join(output_dir, f"{filename_base}.md"), 'w') as f:
+            with open(os.path.join(output_dir, f"{filename_base}.md"), 'w', encoding='utf-8') as f:
                 f.write(full_md)
 
 
