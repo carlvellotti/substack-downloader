@@ -59,22 +59,25 @@ class SubstackScraper:
             print(f"Error loading session file: {e}")
             return False
 
-    def get_archive(self, limit=12, offset=0):
-        """Fetch list of posts from the archive API."""
+    def get_archive(self, limit=12, cursor=None, offset=0):
+        """Fetch one archive page. Returns (posts, next_cursor, cursor_paged).
+
+        The archive API pages with `cursor` and answers {"posts": [...], "nextCursor": ...}, with a
+        null nextCursor on the last page; since Nov 2026 it rejects `offset` with 400. A list answer
+        is the older offset-paged API, where the caller advances `offset`. Request errors propagate.
+        """
         url = f"{self.base_url}/api/v1/archive"
-        params = {
-            'sort': 'new',
-            'search': '',
-            'offset': offset,
-            'limit': limit
-        }
-        try:
-            response = self.session.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching archive: {e}")
-            return []
+        params = {'sort': 'new', 'search': '', 'limit': limit}
+        if cursor:
+            params['cursor'] = cursor
+        elif offset:
+            params['offset'] = offset
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, list):
+            return data, None, False
+        return data.get('posts') or [], data.get('nextCursor'), True
 
     def get_post(self, slug):
         """Fetch full post content."""
@@ -240,6 +243,7 @@ class SubstackScraper:
         print(f"Starting scrape for {self.base_url}...")
         
         offset = 0
+        cursor = None
         batch_size = 12
         total_fetched = 0
         
@@ -252,7 +256,7 @@ class SubstackScraper:
                 batch_limit = limit - total_fetched
 
             print(f"Fetching posts {offset} to {offset + batch_limit}...")
-            posts = self.get_archive(limit=batch_limit, offset=offset)
+            posts, cursor, cursor_paged = self.get_archive(limit=batch_limit, cursor=cursor, offset=offset)
             
             if not posts:
                 break
@@ -283,7 +287,9 @@ class SubstackScraper:
             # We must consistently move the offset by the number of posts fetched from API
             offset += len(posts)
             
-            if len(posts) < batch_limit:  # No more posts (checked against what we asked for)
+            if cursor_paged and not cursor:  # null nextCursor: last page
+                break
+            if not cursor_paged and len(posts) < batch_limit:  # offset API: a short page is the last
                 break
 
         print(f"Scraping complete. Downloaded {total_fetched} posts.")
@@ -332,7 +338,11 @@ def main():
     domain = urlparse(args.url).netloc
     output_dir = os.path.join("archive", domain)
     
-    scraper.scrape(output_dir=output_dir, limit=args.limit, skip_podcasts=args.skip_podcasts, html_only=args.html_only, md_only=args.md_only)
+    try:
+        scraper.scrape(output_dir=output_dir, limit=args.limit, skip_podcasts=args.skip_podcasts, html_only=args.html_only, md_only=args.md_only)
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching archive: {e}")
+        raise SystemExit(1)
 
 if __name__ == "__main__":
     main()
